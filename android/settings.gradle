@@ -1,6 +1,39 @@
-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
-plugins { id("com.facebook.react.settings") }
-extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+pluginManagement { 
+    includeBuild("../node_modules/@react-native/gradle-plugin") 
+}
+
+plugins { 
+    id("com.facebook.react.settings") 
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> 
+    ex.autolinkLibrariesFromCommand() 
+}
+
 rootProject.name = 'whatsappclone'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://www.jitpack.io' }
+
+        // 1. The fix for Async Storage
+        maven {
+            url = uri("../node_modules/@react-native-async-storage/async-storage/android/local_repo")
+        }
+
+        // 2. REQUIRED: Points to the React Native Android binaries
+        maven {
+            url = uri("../node_modules/react-native/android")
+        }
+
+        // 3. REQUIRED: Points to the JavaScript engine binaries
+        maven {
+            url = uri("../node_modules/jsc-android/dist")
+        }
+    }
+}

@@ -1,110 +1,192 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { 
-  View, 
-  FlatList, 
-  ActivityIndicator, 
-  TextInput, 
-  Text, 
-  SafeAreaView 
+  View, FlatList, ActivityIndicator, TextInput, Text, 
+  SafeAreaView, TouchableOpacity, Modal, KeyboardAvoidingView, Platform 
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
+import Contacts from 'react-native-contacts';
+import { request, requestMultiple, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
-import { getItem } from '../data/storage';  
+import { getItem, setItem } from '../data/storage';  
 import { Contact } from '../types/navigation';
 import ContactItem from '../components/ContactItem';
-import { homeStyles } from '../styles/globalStyles';
+import { homeStyles, modalStyles } from '../styles/globalStyles';
 
 const HomeScreen = ({ navigation }: any) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const isFocused = useIsFocused();
 
-  // Load data from AsyncStorage
-  const loadData = async () => {
-    try {
-      const data = await getItem(); 
-      // Sort contacts so the one with the newest message is at the top
-      const sortedData = [...data].sort((a, b) => {
-        if (!a.messages.length) return 1;
-        if (!b.messages.length) return -1;
-        return b.messages[b.messages.length - 1].id > a.messages[a.messages.length - 1].id ? 1 : -1;
-      });
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
-      setContacts(sortedData);
-      setFilteredContacts(sortedData);
-    } catch (error) {
-      console.error("Home Screen Load Error:", error);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={{ marginRight: 20, padding: 5 }}>
+          <Text style={{ color: 'white', fontSize: 32, fontWeight: '300' }}>+</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
+  const syncAllContacts = async () => {
+    try {
+      let hasPermission = false;
+      if (Platform.OS === 'android') {
+        const stats = await requestMultiple([
+          PERMISSIONS.ANDROID.READ_CONTACTS,
+          PERMISSIONS.ANDROID.WRITE_CONTACTS,
+        ]);
+        hasPermission = stats[PERMISSIONS.ANDROID.READ_CONTACTS] === RESULTS.GRANTED;
+      } else {
+        const stat = await request(PERMISSIONS.IOS.CONTACTS);
+        hasPermission = stat === RESULTS.GRANTED;
+      }
+
+      const localAppContacts = await getItem() || [];
+      
+      if (hasPermission) {
+        const phoneContacts = await Contacts.getAll();
+        
+        const formattedPhone = phoneContacts.map(c => ({
+          id: c.recordID,
+          name: `${c.givenName} ${c.familyName}`.trim() || 'Unknown',
+          avatar: c.thumbnailPath || `https://ui-avatars.com/api/?name=${c.givenName}+${c.familyName}&background=random`,
+          lastMessage: "Synced from phone",
+          messages: [],
+        }));
+
+        const contactMap = new Map();
+        formattedPhone.forEach(c => contactMap.set(c.id, c));
+        localAppContacts.forEach((c: Contact) => contactMap.set(c.id, c));
+
+        const merged = Array.from(contactMap.values());
+        sortAndSet(merged);
+      } else {
+        sortAndSet(localAppContacts);
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // refresh the list every time the user navigates back to Home
+  const sortAndSet = (data: Contact[]) => {
+    const sorted = [...data].sort((a, b) => {
+      const timeA = a.messages?.length > 0 ? Number(a.messages[a.messages.length - 1].id) : 0;
+      const timeB = b.messages?.length > 0 ? Number(b.messages[b.messages.length - 1].id) : 0;
+      return timeB - timeA || a.name.localeCompare(b.name);
+    });
+    setContacts(sorted);
+    setItem(sorted);
+  };
+
   useEffect(() => {
-    if (isFocused) {
-      loadData();
-    }
+    if (isFocused) syncAllContacts();
   }, [isFocused]);
 
-  const handleSearch = (text: string) => {
-    setSearchQuery(text);
-    if (text.trim() === '') {
-      setFilteredContacts(contacts);
-    } else {
-      const filtered = contacts.filter(contact =>
-        contact.name.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredContacts(filtered);
+  const handleAddContact = async () => {
+    if (!firstName.trim() || !phoneNumber.trim()) return;
+
+    const newPhoneContact = {
+      givenName: firstName,
+      familyName: lastName,
+      phoneNumbers: [{ label: 'mobile', number: phoneNumber }],
+    };
+
+    const newAppContact: Contact = {
+      id: `u${Date.now()}`,
+      name: `${firstName} ${lastName}`.trim(),
+      avatar: `https://ui-avatars.com/api/?name=${firstName}+${lastName}&background=random`,
+      lastMessage: "No messages yet",
+      messages: [],
+    };
+
+    try {
+      await Contacts.addContact(newPhoneContact);
+      const current = await getItem() || [];
+      const updated = [newAppContact, ...current];
+      sortAndSet(updated);
+      
+      setFirstName(''); setLastName(''); setPhoneNumber('');
+      setModalVisible(false);
+    } catch (err) {
+      console.error("Save error:", err);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={homeStyles.center}>
-        <ActivityIndicator size="large" color="#075E54" />
-        <Text style={{ marginTop: 10, color: '#075E54' }}>Loading Chats...</Text>
-      </View>
-    );
-  }
+  const filteredContacts = useMemo(() => {
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    return contacts.filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(lowerQuery);
+      const hasMessages = c.messages && c.messages.length > 0;
+      return lowerQuery.length > 0 ? matchesSearch : hasMessages;
+    });
+  }, [searchQuery, contacts]);
+
+  const renderItem = useCallback(({ item }: { item: Contact }) => (
+    <ContactItem
+      item={item}
+      onPress={() => navigation.navigate('Chat', { contactId: item.id, name: item.name })}
+    />
+  ), [navigation]);
+
+  if (loading) return <View style={homeStyles.center}><ActivityIndicator size="large" color="#075E54" /></View>;
 
   return (
     <SafeAreaView style={homeStyles.container}>
-      {/* WhatsApp Style Search Bar */}
       <View style={homeStyles.searchContainer}>
         <TextInput
           style={homeStyles.searchInput}
-          placeholder="Search..."
-          placeholderTextColor="#666"
+          placeholder="Search contacts..."
           value={searchQuery}
-          onChangeText={handleSearch}
+          onChangeText={setSearchQuery}
+          autoCorrect={false}
         />
       </View>
 
       <FlatList
         data={filteredContacts}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <ContactItem
-            item={item}
-            onPress={() => navigation.navigate('Chat', {
-              contactId: item.id,
-              name: item.name
-            })}
-          />
-        )}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        initialNumToRender={15}
+        windowSize={5}
+        contentContainerStyle={{ paddingBottom: 100 }} 
         ListEmptyComponent={
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ color: '#666' }}>No conversations found</Text>
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Text style={{ color: '#999' }}>
+              {searchQuery ? "No contacts found" : "No active conversations"}
+            </Text>
           </View>
         }
-        // Optimization for smooth scrolling
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={5}
       />
+
+      <Modal animationType="slide" transparent={true} visible={isModalVisible}>
+        <TouchableOpacity style={modalStyles.overlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <TouchableOpacity activeOpacity={1} style={modalStyles.bottomSheet}>
+              <View style={modalStyles.handle} />
+              <Text style={modalStyles.title}>New Contact</Text>
+              <TextInput style={modalStyles.input} placeholder="First Name" value={firstName} onChangeText={setFirstName} autoFocus />
+              <TextInput style={modalStyles.input} placeholder="Last Name" value={lastName} onChangeText={setLastName} />
+              <TextInput style={modalStyles.input} placeholder="Phone Number" keyboardType="phone-pad" value={phoneNumber} onChangeText={setPhoneNumber} />
+              <TouchableOpacity 
+                style={[modalStyles.addButton, { opacity: firstName && phoneNumber ? 1 : 0.5 }]} 
+                onPress={handleAddContact}
+                disabled={!firstName || !phoneNumber}
+              >
+                <Text style={modalStyles.addButtonText}>Save Contact</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };

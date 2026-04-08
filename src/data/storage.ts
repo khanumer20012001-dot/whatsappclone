@@ -10,12 +10,11 @@ const transformInitialData = (): Contact[] => {
   const messages = raw.messages || [];
 
   return users.map((user: any) => {
-    // FIX: Match messages where sender is 'u9' OR ID starts with 'm9'
     const userMessages: Message[] = messages
       .filter((msg: any) => {
-        const userNum = user.id.replace('u', ''); // 'u9' -> '9'
+        const userNum = user.id.replace('u', ''); 
         const isFromUser = msg.sender_id === user.id;
-        const isMeToUser = msg.id.startsWith(`m${userNum}`); // matches 'm9' and 'm9_reply'
+        const isMeToUser = msg.id.startsWith(`m${userNum}`); 
         
         return isFromUser || isMeToUser;
       })

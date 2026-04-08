@@ -1,6 +1,6 @@
 import { StyleSheet, Platform, Dimensions } from 'react-native';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export const globalStyles = StyleSheet.create({
   flex1: {
@@ -72,11 +72,71 @@ export const homeStyles = StyleSheet.create({
     color: '#666666',
     marginTop: 2,
   },
+  // Added back for HomeScreen loading
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  }
+    backgroundColor: '#ffffff',
+  },
+});
+
+export const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 25,
+    width: '100%',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  handle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#075E54',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    backgroundColor: '#f5f6f7',
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    color: '#000',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  addButton: {
+    backgroundColor: '#075E54',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 });
 
 export const chatStyles = StyleSheet.create({
@@ -227,9 +287,147 @@ export const chatStyles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f0f0f0',
   },
+  // Added back for ChatScreen loading
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
+});
+
+export const statusStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  myStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f0f0f0',
+  },
+  avatarContainer: {
+    position: 'relative',
+    width: 60,
+    height: 60,
+  },
+  myAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#dfe5e7',
+  },
+  plusIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#25D366', 
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    elevation: 2,
+  },
+  plusText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: -2,
+  },
+  sectionHeader: {
+    backgroundColor: '#f5f6f7',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    color: '#667781', 
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+  },
+  statusCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2.5,
+    borderColor: '#25D366', 
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  viewedCircle: {
+    borderColor: '#D1D7DB', 
+  },
+  statusThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#eee',
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  titleText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111B21', 
+  },
+  subText: {
+    fontSize: 14,
+    color: '#667781',
+    marginTop: 3,
+  },
+  threeDot: {
+    paddingHorizontal: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dotText: {
+    fontSize: 24,
+    color: '#667781',
+    fontWeight: 'bold',
+  },
+  // Added back for StatusScreen loading
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+});
+
+export const viewerStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  fullMedia: {
+    width: width,
+    height: height * 0.85,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 20,
+    zIndex: 10,
+    padding: 10
+  },
+  closeText: {
+    color: 'white',
+    fontSize: 30,
+    fontWeight: '300'
+  }
 });

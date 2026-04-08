@@ -1,3 +1,5 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
 buildscript {
     ext {
         buildToolsVersion = "36.0.0"
@@ -12,10 +14,17 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
+        // Explicitly defining the AGP version resolves the 'Plugin not found' error
+        classpath("com.android.tools.build:gradle:8.2.1") 
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
     }
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+/**
+ * NOTE: The 'allprojects' block is intentionally omitted here because 
+ * it is now managed by 'dependencyResolutionManagement' in settings.gradle.
+ * This prevents repository conflicts in Gradle 8.0+.
+ */
