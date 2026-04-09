@@ -53,9 +53,12 @@ const HomeScreen = ({ navigation }: any) => {
       if (hasPermission) {
         const phoneContacts = await Contacts.getAll();
         
+        // --- FIX 1: Extract the ACTUAL phone number string from the native contact object ---
         const formattedPhone = phoneContacts.map(c => ({
           id: c.recordID,
           name: `${c.givenName} ${c.familyName}`.trim() || 'Unknown',
+          // Grab the first number found in the phoneNumbers array
+          phone: c.phoneNumbers && c.phoneNumbers.length > 0 ? c.phoneNumbers[0].number : "", 
           avatar: c.thumbnailPath || `https://ui-avatars.com/api/?name=${c.givenName}+${c.familyName}&background=random`,
           lastMessage: "Synced from phone",
           messages: [],
@@ -63,7 +66,15 @@ const HomeScreen = ({ navigation }: any) => {
 
         const contactMap = new Map();
         formattedPhone.forEach(c => contactMap.set(c.id, c));
-        localAppContacts.forEach((c: Contact) => contactMap.set(c.id, c));
+        
+        // --- FIX 2: Overwrite IDs with phone numbers if they exist in storage ---
+        localAppContacts.forEach((c: Contact) => {
+            const existing = contactMap.get(c.id);
+            contactMap.set(c.id, { 
+                ...c, 
+                phone: existing?.phone || c.phone || "" // Ensure phone field is preserved
+            });
+        });
 
         const merged = Array.from(contactMap.values());
         sortAndSet(merged);
@@ -103,6 +114,7 @@ const HomeScreen = ({ navigation }: any) => {
     const newAppContact: Contact = {
       id: `u${Date.now()}`,
       name: `${firstName} ${lastName}`.trim(),
+      phone: phoneNumber, 
       avatar: `https://ui-avatars.com/api/?name=${firstName}+${lastName}&background=random`,
       lastMessage: "No messages yet",
       messages: [],
@@ -133,7 +145,12 @@ const HomeScreen = ({ navigation }: any) => {
   const renderItem = useCallback(({ item }: { item: Contact }) => (
     <ContactItem
       item={item}
-      onPress={() => navigation.navigate('Chat', { contactId: item.id, name: item.name })}
+      // --- FIX 3: Pass the phone number explicitly to the Chat screen ---
+      onPress={() => navigation.navigate('Chat', { 
+          contactId: item.id, 
+          name: item.name, 
+          phoneNumber: item.phone 
+      })}
     />
   ), [navigation]);
 

@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, Platform, Modal, StyleSheet, Dimensions, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  View, Text, FlatList, Image, TouchableOpacity, Platform, 
+  Modal, Dimensions, Alert, AlertButton, PermissionsAndroid 
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import * as ScopedStorage from 'react-native-scoped-storage';
 import { launchImageLibrary } from 'react-native-image-picker';
@@ -9,20 +12,114 @@ import { statusStyles, viewerStyles } from '../styles/globalStyles';
 
 const { width, height } = Dimensions.get('window');
 const DOWNLOAD_LOG_KEY = '@download_expiry_log';
+const STATUS_DIR_KEY = '@whatsapp_status_uri';
 
 const StatusScreen = () => {
   const [myStatuses, setMyStatuses] = useState<any[]>([]);
   const [friendStatuses, setFriendStatuses] = useState<any[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<any>(null);
   const [isViewerVisible, setIsViewerVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const getAlbumPath = () => `${RNFS.ExternalStorageDirectoryPath}/Pictures/Downloaded Statuses`;
 
+  // 1. Initial Load: Check Permissions and Persisted Folders
   useEffect(() => {
-    fetchWhatsAppStatuses();
-    cleanupExpiredStatuses(); 
+    const initialize = async () => {
+      const hasPermission = await requestMediaPermissions();
+      if (hasPermission) {
+        await fetchWhatsAppStatuses();
+        await cleanupExpiredStatuses();
+      }
+    };
+    initialize();
   }, []);
 
+  // 2. Android 13+ Granular Permissions Handler
+  const requestMediaPermissions = async () => {
+    if (Platform.OS !== 'android') return true;
+
+    try {
+      if (Number(Platform.Version) >= 33) {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+        ]);
+        return (
+          granted['android.permission.READ_MEDIA_IMAGES'] === PermissionsAndroid.RESULTS.GRANTED &&
+          granted['android.permission.READ_MEDIA_VIDEO'] === PermissionsAndroid.RESULTS.GRANTED
+        );
+      } else {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+    } catch (err) {
+      return false;
+    }
+  };
+
+  // 3. Fetch Statuses with One-Time Folder Selection
+  const fetchWhatsAppStatuses = async () => {
+    setLoading(true);
+    try {
+      let savedUri = await AsyncStorage.getItem(STATUS_DIR_KEY);
+
+      if (!savedUri) {
+        // If first time, open folder picker
+        // Android 11/12 users should navigate to: Android > media > com.whatsapp > WhatsApp > Media > .Statuses
+        Alert.alert(
+          "Storage Access",
+          "Please select the WhatsApp '.Statuses' folder to show recent updates.",
+          [{ text: "OK", onPress: async () => triggerFolderPicker() }]
+        );
+        setLoading(false);
+        return;
+      }
+
+      await loadFilesFromUri(savedUri);
+    } catch (err) {
+      console.log("Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerFolderPicker = async () => {
+    try {
+      const dir = await ScopedStorage.openDocumentTree(true); // true = persist permission
+      if (dir && dir.uri) {
+        await AsyncStorage.setItem(STATUS_DIR_KEY, dir.uri);
+        await loadFilesFromUri(dir.uri);
+      }
+    } catch (err) {
+      Alert.alert("Permission Denied", "Cannot access statuses without folder permission.");
+    }
+  };
+
+  const loadFilesFromUri = async (uri: string) => {
+    const files = await ScopedStorage.listFiles(uri);
+    const albumPath = getAlbumPath();
+
+    const formatted = await Promise.all(
+      files
+        .filter(f => f.name.endsWith('.mp4') || f.name.endsWith('.jpg'))
+        .map(async f => {
+          const alreadyDownloaded = await RNFS.exists(`${albumPath}/${f.name}`);
+          return {
+            id: f.name,
+            uri: f.uri,
+            name: "WhatsApp Status",
+            isVideo: f.name.endsWith('.mp4'),
+            downloaded: alreadyDownloaded,
+          };
+        })
+    );
+    setFriendStatuses(formatted);
+  };
+
+  // 4. Auto-Cleanup (24h Logic)
   const cleanupExpiredStatuses = async () => {
     try {
       const storedData = await AsyncStorage.getItem(DOWNLOAD_LOG_KEY);
@@ -32,36 +129,34 @@ const StatusScreen = () => {
       const now = Date.now();
       const expirationTime = 24 * 60 * 60 * 1000; 
       const albumPath = getAlbumPath();
-
       const validLogs = [];
 
       for (const log of downloadLogs) {
         if (now - log.timestamp > expirationTime) {
           const filePath = `${albumPath}/${log.id}`;
-          const exists = await RNFS.exists(filePath);
-          if (exists) {
+          if (await RNFS.exists(filePath)) {
             await RNFS.unlink(filePath); 
             if (Platform.OS === 'android') RNFS.scanFile(filePath);
-            console.log(`Deleted expired status: ${log.id}`);
           }
         } else {
           validLogs.push(log); 
         }
       }
-
       await AsyncStorage.setItem(DOWNLOAD_LOG_KEY, JSON.stringify(validLogs));
     } catch (err) {
       console.log("Cleanup Error:", err);
     }
   };
 
+  // 5. Download & Delete Actions
   const handleDownload = async (item: any) => {
     try {
       const albumPath = getAlbumPath();
-      const folderExists = await RNFS.exists(albumPath);
-      if (!folderExists) await RNFS.mkdir(albumPath);
+      if (!(await RNFS.exists(albumPath))) await RNFS.mkdir(albumPath);
 
       const destPath = `${albumPath}/${item.id}`;
+      // Note: ScopedStorage URI needs to be handled differently than standard file paths
+      // but copyFile often works if the URI is correctly formatted.
       await RNFS.copyFile(item.uri, destPath);
 
       const storedData = await AsyncStorage.getItem(DOWNLOAD_LOG_KEY);
@@ -74,82 +169,68 @@ const StatusScreen = () => {
       );
 
       if (Platform.OS === 'android') RNFS.scanFile(destPath);
-      Alert.alert("Success", "Status saved. It will auto-delete in 24 hours.");
+      Alert.alert("Saved", "Status will auto-delete in 24 hours.");
     } catch (err) {
-      console.log("Download error:", err);
       Alert.alert("Error", "Could not save to gallery.");
     }
   };
 
-  const fetchWhatsAppStatuses = async () => {
+  const handleDeleteFromMobile = async (item: any) => {
     try {
-      const dir = await ScopedStorage.openDocumentTree(true);
-      if (dir) {
-        const files = await ScopedStorage.listFiles(dir.uri);
-        const albumPath = getAlbumPath();
-
-        const formatted = await Promise.all(
-          files
-            .filter(f => f.name.endsWith('.mp4') || f.name.endsWith('.jpg'))
-            .map(async f => {
-              const alreadyDownloaded = await RNFS.exists(`${albumPath}/${f.name}`);
-              return {
-                id: f.name,
-                uri: f.uri,
-                name: "Friend Status",
-                isVideo: f.name.endsWith('.mp4'),
-                downloaded: alreadyDownloaded,
-              };
-            })
-        );
-        setFriendStatuses(formatted);
+      const filePath = `${getAlbumPath()}/${item.id}`;
+      if (await RNFS.exists(filePath)) {
+        await RNFS.unlink(filePath);
+        if (Platform.OS === 'android') RNFS.scanFile(filePath);
       }
+
+      const storedData = await AsyncStorage.getItem(DOWNLOAD_LOG_KEY);
+      if (storedData) {
+        let logs = JSON.parse(storedData);
+        logs = logs.filter((l: any) => l.id !== item.id);
+        await AsyncStorage.setItem(DOWNLOAD_LOG_KEY, JSON.stringify(logs));
+      }
+
+      setFriendStatuses(prev =>
+        prev.map(s => (s.id === item.id ? { ...s, downloaded: false } : s))
+      );
     } catch (err) {
-      console.log("Scoped Storage Error:", err);
+      Alert.alert("Error", "Deletion failed.");
     }
   };
 
-  const handleRemove = async (item: any, isMine: boolean) => {
-    Alert.alert("Remove", "Delete this status?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          if (isMine) {
-            setMyStatuses(prev => prev.filter(s => s.id !== item.id));
-          } else {
-            try {
-              await ScopedStorage.deleteFile(item.uri);
-              setFriendStatuses(prev => prev.filter(s => s.id !== item.id));
-            } catch (err) {
-              Alert.alert("Error", "Could not delete.");
-            }
-          }
-        }
-      }
-    ]);
-  };
-
   const openMenu = (item: any, isMine: boolean) => {
-    Alert.alert("Options", "Choose an action", [
-      { text: "Download (24h Auto-Delete)", onPress: () => handleDownload(item) },
-      { text: "Remove", style: "destructive", onPress: () => handleRemove(item, isMine) },
-      { text: "Cancel", style: "cancel" }
-    ]);
+    const options: AlertButton[] = [];
+
+    if (isMine) {
+      options.push({ 
+        text: "Delete Status", 
+        style: "destructive", 
+        onPress: () => setMyStatuses(prev => prev.filter(s => s.id !== item.id)) 
+      });
+    } else {
+      if (item.downloaded) {
+        options.push({ text: "Delete from Mobile", style: "destructive", onPress: () => handleDeleteFromMobile(item) });
+      } else {
+        options.push({ text: "Download (24h)", onPress: () => handleDownload(item) });
+      }
+    }
+
+    options.push({ text: "Cancel", style: "cancel" });
+    Alert.alert("Options", "Select an action", options);
   };
 
   const handleUploadStatus = async () => {
     const result = await launchImageLibrary({ mediaType: 'mixed', selectionLimit: 1 });
-    if (result.assets && result.assets[0]) {
-      const newStatus = {
-        id: String(Date.now()),
-        uri: result.assets[0].uri,
-        time: 'Just now',
-        isVideo: result.assets[0].type?.includes('video')
-      };
-      setMyStatuses(prev => [newStatus, ...prev]);
-    }
+    if (result.didCancel || !result.assets) return;
+
+    const asset = result.assets[0];
+    const newStatus = {
+      id: String(Date.now()),
+      uri: asset.uri ?? '',
+      time: 'Just now',
+      isVideo: asset.type?.includes('video') ?? false
+    };
+    setMyStatuses(prev => [newStatus, ...prev]);
   };
 
   const openStatus = (item: any) => {
@@ -159,6 +240,7 @@ const StatusScreen = () => {
 
   return (
     <View style={statusStyles.container}>
+      {/* My Status Section */}
       <TouchableOpacity style={statusStyles.myStatusRow} onPress={handleUploadStatus}>
         <View style={statusStyles.avatarContainer}>
           <View style={[statusStyles.myAvatar, { backgroundColor: '#dfe5e7' }]} />
@@ -170,6 +252,7 @@ const StatusScreen = () => {
         </View>
       </TouchableOpacity>
 
+      {/* My Active Updates */}
       {myStatuses.map((item) => (
         <View key={item.id} style={statusStyles.statusRow}>
           <TouchableOpacity style={{ flexDirection: 'row', flex: 1 }} onPress={() => openStatus(item)}>
@@ -187,16 +270,14 @@ const StatusScreen = () => {
 
       <Text style={statusStyles.sectionHeader}>Recent Updates</Text>
 
+      {/* Friend Statuses List */}
       <FlatList
         data={friendStatuses}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={statusStyles.statusRow}>
             <TouchableOpacity style={{ flexDirection: 'row', flex: 1 }} onPress={() => openStatus(item)}>
-              <View style={[
-                statusStyles.statusCircle, 
-                { borderColor: item.downloaded ? '#dfe5e7' : '#25D366' }
-              ]}>
+              <View style={[statusStyles.statusCircle, { borderColor: item.downloaded ? '#dfe5e7' : '#25D366' }]}>
                 <Image source={{ uri: item.uri }} style={statusStyles.statusThumbnail} />
               </View>
               <View style={statusStyles.textContainer}>
@@ -211,6 +292,7 @@ const StatusScreen = () => {
         )}
       />
 
+      {/* Full Screen Viewer */}
       <Modal visible={isViewerVisible} transparent={false} onRequestClose={() => setIsViewerVisible(false)}>
         <View style={viewerStyles.container}>
           <TouchableOpacity style={viewerStyles.closeButton} onPress={() => setIsViewerVisible(false)}>

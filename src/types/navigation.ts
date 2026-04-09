@@ -18,6 +18,7 @@ export interface Contact {
   id: string;
   name: string;
   avatar: string;      // URL to the profile image
+  phone: string; //
   lastMessage: string; // The text preview shown in the Home Screen
   messages: Message[]; // The full history of messages for this specific chat
 }
@@ -30,5 +31,6 @@ export type RootStackParamList = {
   Chat: { 
     contactId: string; // Required to filter messages in ChatScreen
     name: string       // Used to set the header title dynamically
+    phoneNumber: string; // <--- Add this line
   };
 };

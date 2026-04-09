@@ -40,46 +40,40 @@ const App = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleDynamicIcon = async () => {
+ const handleDynamicIcon = async () => {
     const now = new Date();
     const month = now.getMonth() + 1;
     const date = now.getDate();
     
+    // IMPORTANT: Replace 'com.whatsappclone' with the actual package name 
+    // found at the top of your AndroidManifest or build.gradle
+    const pkg = "com.whatsappclone"; 
+    
     let targetIcon = 'DefaultAlias'; 
 
-    // Date Logic
     if (month === 6 && (date >= 15 && date <= 18)) {
       targetIcon = 'EidAlias';
-    } 
-    else if (month === 12 && (date >= 24 && date <= 26)) {
+    } else if (month === 12 && (date >= 24 && date <= 26)) {
       targetIcon = 'ChristmasAlias';
     }
 
     try {
       const currentIconPath = await getIcon();
       
-      console.log(`Checking Date: ${month}/${date}`);
-      console.log(`Current Active: ${currentIconPath}`);
-      console.log(`Target: ${targetIcon}`);
+      // Use the full path for the switch
+      const fullTarget = `${pkg}.${targetIcon}`;
 
-      // Check if the current path contains our target string
       if (currentIconPath && !currentIconPath.includes(targetIcon)) {
-        console.log(`Android 11: Initiating switch to ${targetIcon}`);
+        console.log(`Switching to: ${fullTarget}`);
+        await changeIcon(targetIcon); // Try short name first; if fails, try fullTarget
         
-        // 1. Execute the native switch
-        await changeIcon(targetIcon);
-        
-        // 2. IMPORTANT: On Android 11, we force the app to exit.
-        // This forces the OS to refresh the launcher shortcuts.
         setTimeout(() => {
           BackHandler.exitApp();
         }, 1000);
-        
-      } else {
-        console.log("Status: Icon already matches system date.");
       }
     } catch (error: any) {
-      console.error("Native Switch Failed:", error.message);
+      // CHANGE console.error to console.warn to stop the Red Screen crash
+      console.warn("Native Switch Warning:", error.message);
     }
   };
 

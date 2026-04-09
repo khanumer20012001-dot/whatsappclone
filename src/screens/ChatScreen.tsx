@@ -9,7 +9,9 @@ import {
   Platform,
   Text,
   Image,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking, 
+  Alert    
 } from 'react-native';
 
 import { getItem, setItem } from '../data/storage'; 
@@ -18,7 +20,9 @@ import MessageBubble from '../components/MessageBubble';
 import { chatStyles as styles } from '../styles/globalStyles';
 
 const ChatScreen = ({ route, navigation }: any) => {
-  const { contactId, name } = route.params;
+  // FIXED: Destructure phoneNumber from params to use it directly
+  const { contactId, name, phoneNumber } = route?.params || {}; 
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -60,10 +64,38 @@ const ChatScreen = ({ route, navigation }: any) => {
     setLoading(false);
   };
 
+  /**
+   * REFINED HANDLE SEND
+   * Prioritizes the real phone number over the database ID.
+   */
   const handleSend = async () => {
     if (newMessage.trim() === '') return;
 
+    // 1. EXTRACTING PHONE NUMBER 
+    // Priorities: 1. Passed via navigation, 2. Stored in contact object, 3. Fallback to ID
+    let rawPhone = phoneNumber || contact?.phone || contactId;
+
+    // 2. CLEAN AND FORMAT FOR PAKISTAN (92)
+    let cleanPhone = rawPhone.replace(/[^0-9]/g, ''); 
+
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '92' + cleanPhone.substring(1);
+    } else if (cleanPhone.length === 10) {
+      cleanPhone = '92' + cleanPhone;
+    }
+
+    // FINAL VALIDATION: Ensure we aren't just sending an ID like "1465"
+    if (cleanPhone.length < 10) {
+      Alert.alert(
+        "Invalid Number", 
+        `We found "${cleanPhone}" which is too short to open WhatsApp. Please check the phone book for ${name}.`
+      );
+      return;
+    }
+
     const content = newMessage.trim();
+
+    // 3. UPDATE LOCAL STATE (UI Sync)
     const newMsg: Message = {
       id: Date.now().toString(),
       content: content,
@@ -78,24 +110,26 @@ const ChatScreen = ({ route, navigation }: any) => {
     setMessages(updatedMessages);
     setNewMessage('');
 
-    setTimeout(async () => {
-      try {
-        const storedData = await getItem();
-        const updatedContacts = storedData.map((c: Contact) => {
-          if (c.id === contactId) {
-            return { 
-              ...c, 
-              messages: updatedMessages, 
-              lastMessage: content 
-            };
-          }
-          return c;
-        });
-        await setItem(updatedContacts);
-      } catch (e) {
-        console.error("Storage Error:", e);
-      }
-    }, 0);
+    // 4. PERSIST TO STORAGE
+    try {
+      const storedData = await getItem();
+      const updatedContacts = storedData.map((c: Contact) => {
+        if (c.id === contactId) {
+          return { ...c, messages: updatedMessages, lastMessage: content };
+        }
+        return c;
+      });
+      await setItem(updatedContacts);
+    } catch (e) {
+      console.error("Storage Error:", e);
+    }
+
+    // 5. OPEN WHATSAPP
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(content)}`;
+
+    Linking.openURL(whatsappUrl).catch(() => {
+      Alert.alert("Error", "WhatsApp is not installed on this device.");
+    });
   };
 
   const handleUpdateMessage = async (messageId: string, action: 'delete' | 'react', emojiValue?: string) => {
@@ -109,17 +143,15 @@ const ChatScreen = ({ route, navigation }: any) => {
     }
     setMessages(newMessages);
 
-    setTimeout(async () => {
-      const storedData = await getItem();
-      const updatedContacts = storedData.map((c: Contact) => {
-        if (c.id === contactId) {
-          const newestText = newMessages.length > 0 ? newMessages[newMessages.length - 1].content : "No messages yet";
-          return { ...c, messages: newMessages, lastMessage: newestText };
-        }
-        return c;
-      });
-      await setItem(updatedContacts);
-    }, 0);
+    const storedData = await getItem();
+    const updatedContacts = storedData.map((c: Contact) => {
+      if (c.id === contactId) {
+        const newestText = newMessages.length > 0 ? newMessages[newMessages.length - 1].content : "No messages yet";
+        return { ...c, messages: newMessages, lastMessage: newestText };
+      }
+      return c;
+    });
+    await setItem(updatedContacts);
   };
 
   const renderItem = useCallback(({ item }: { item: Message }) => (
@@ -142,10 +174,6 @@ const ChatScreen = ({ route, navigation }: any) => {
         renderItem={renderItem}
         inverted={true} 
         contentContainerStyle={{ padding: 10, paddingTop: 20 }}
-        initialNumToRender={15}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        removeClippedSubviews={Platform.OS === 'android'}
       />
 
       <KeyboardAvoidingView
