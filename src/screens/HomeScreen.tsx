@@ -53,7 +53,6 @@ const HomeScreen = ({ navigation }: any) => {
       if (hasPermission) {
         const phoneContacts = await Contacts.getAll();
         
-        // --- FIX 1: Extract the ACTUAL phone number string from the native contact object ---
         const formattedPhone = phoneContacts.map(c => ({
           id: c.recordID,
           name: `${c.givenName} ${c.familyName}`.trim() || 'Unknown',
@@ -67,7 +66,6 @@ const HomeScreen = ({ navigation }: any) => {
         const contactMap = new Map();
         formattedPhone.forEach(c => contactMap.set(c.id, c));
         
-        // --- FIX 2: Overwrite IDs with phone numbers if they exist in storage ---
         localAppContacts.forEach((c: Contact) => {
             const existing = contactMap.get(c.id);
             contactMap.set(c.id, { 
@@ -145,7 +143,6 @@ const HomeScreen = ({ navigation }: any) => {
   const renderItem = useCallback(({ item }: { item: Contact }) => (
     <ContactItem
       item={item}
-      // --- FIX 3: Pass the phone number explicitly to the Chat screen ---
       onPress={() => navigation.navigate('Chat', { 
           contactId: item.id, 
           name: item.name, 

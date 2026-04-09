@@ -72,7 +72,6 @@ export const homeStyles = StyleSheet.create({
     color: '#666666',
     marginTop: 2,
   },
-  // Added back for HomeScreen loading
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -287,7 +286,6 @@ export const chatStyles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f0f0f0',
   },
-  // Added back for ChatScreen loading
   center: {
     flex: 1,
     justifyContent: 'center',

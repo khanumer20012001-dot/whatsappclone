@@ -155,8 +155,6 @@ const StatusScreen = () => {
       if (!(await RNFS.exists(albumPath))) await RNFS.mkdir(albumPath);
 
       const destPath = `${albumPath}/${item.id}`;
-      // Note: ScopedStorage URI needs to be handled differently than standard file paths
-      // but copyFile often works if the URI is correctly formatted.
       await RNFS.copyFile(item.uri, destPath);
 
       const storedData = await AsyncStorage.getItem(DOWNLOAD_LOG_KEY);

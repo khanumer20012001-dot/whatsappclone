@@ -45,7 +45,6 @@ const App = () => {
     const month = now.getMonth() + 1;
     const date = now.getDate();
     
-    // IMPORTANT: Replace 'com.whatsappclone' with the actual package name 
     // found at the top of your AndroidManifest or build.gradle
     const pkg = "com.whatsappclone"; 
     
@@ -65,14 +64,13 @@ const App = () => {
 
       if (currentIconPath && !currentIconPath.includes(targetIcon)) {
         console.log(`Switching to: ${fullTarget}`);
-        await changeIcon(targetIcon); // Try short name first; if fails, try fullTarget
+        await changeIcon(targetIcon); 
         
         setTimeout(() => {
           BackHandler.exitApp();
         }, 1000);
       }
     } catch (error: any) {
-      // CHANGE console.error to console.warn to stop the Red Screen crash
       console.warn("Native Switch Warning:", error.message);
     }
   };

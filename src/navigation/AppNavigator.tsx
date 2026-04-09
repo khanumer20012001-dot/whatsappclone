@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'; 
-import Icon from 'react-native-vector-icons/Ionicons'; // Ensure this is installed
+import Icon from 'react-native-vector-icons/Ionicons'; 
 import HomeScreen from '../screens/HomeScreen';
 import ChatScreen from '../screens/ChatScreen';
 import StatusScreen from '../screens/StatusScreen'; 

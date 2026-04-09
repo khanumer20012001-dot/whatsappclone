@@ -20,7 +20,6 @@ import MessageBubble from '../components/MessageBubble';
 import { chatStyles as styles } from '../styles/globalStyles';
 
 const ChatScreen = ({ route, navigation }: any) => {
-  // FIXED: Destructure phoneNumber from params to use it directly
   const { contactId, name, phoneNumber } = route?.params || {}; 
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -64,18 +63,13 @@ const ChatScreen = ({ route, navigation }: any) => {
     setLoading(false);
   };
 
-  /**
-   * REFINED HANDLE SEND
-   * Prioritizes the real phone number over the database ID.
-   */
+
   const handleSend = async () => {
     if (newMessage.trim() === '') return;
 
     // 1. EXTRACTING PHONE NUMBER 
     // Priorities: 1. Passed via navigation, 2. Stored in contact object, 3. Fallback to ID
     let rawPhone = phoneNumber || contact?.phone || contactId;
-
-    // 2. CLEAN AND FORMAT FOR PAKISTAN (92)
     let cleanPhone = rawPhone.replace(/[^0-9]/g, ''); 
 
     if (cleanPhone.startsWith('0')) {

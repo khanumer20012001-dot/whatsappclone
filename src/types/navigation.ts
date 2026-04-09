@@ -31,6 +31,6 @@ export type RootStackParamList = {
   Chat: { 
     contactId: string; // Required to filter messages in ChatScreen
     name: string       // Used to set the header title dynamically
-    phoneNumber: string; // <--- Add this line
+    phoneNumber: string; 
   };
 };
